@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Public Thought Receipts</title>
+<!--
+  SETUP
+  1. Create a Supabase project: https://supabase.com
+  2. In the Supabase SQL editor, run schema.sql (next to this file).
+  3. Open Project Settings → API and copy the Project URL and anon public key.
+  4. Replace SUPABASE_URL and SUPABASE_ANON_KEY in the <script> below.
+  5. Drop this file on any static host (Vercel, Netlify, Cloudflare Pages, GitHub Pages).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f4ecd9;
+    --grid: rgba(82, 50, 18, 0.22);
+    --paper: #e8e3da;
+    --paper-shade: #d8d3c8;
+    --ink: #1a1a1a;
+    --ink-soft: #555;
+    --ink-faint: #888;
+    --rule: #707070;
+    --machine: #d2cec5;
+    --machine-shade: #a8a49a;
+    --machine-deep: #5a5751;
+    --slot: #050505;
+    --led-bg: #060606;
+    --led-on: #f1efe6;
+    --led-off: #1a1a1a;
+    --led-cursor: rgba(241, 239, 230, 0.4);
+    --green: #1fd178;
+    --green-rgb: 31, 209, 120;
+    --orange: #ff7a3d;
+    --orange-deep: #c34a14;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    font-family: var(--font-display);
+    overflow: hidden;
+    color: var(--ink);
+  }
+
+  body {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  /* ---------- ONLINE PILL ---------- */
+  .online-pill {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: rgba(28, 28, 28, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #f1efe6;
+    z-index: 1000;
+  }
+  .online-pill .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: ring 1.6s ease-out infinite;
+  }
+  @keyframes ring {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--green-rgb), 0.6); }
+    70%  { box-shadow: 0 0 0 9px rgba(var(--green-rgb), 0); }
+    100% { box-shadow: 0 0 0 0 rgba(var(--green-rgb), 0); }
+  }
+
+  /* ---------- STAGE ---------- */
+  .stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ---------- RECEIPT ---------- */
+  .receipt-wrapper {
+    position: absolute;
+    left: 50%;
+    bottom: 208px;            /* anchored exactly at the slot top */
+    width: 320px;             /* matches the slot exactly */
+    height: 90vh;             /* tall viewport; bottom is the slot, top is offscreen-ish */
+    transform: translateX(-50%);
+    overflow: hidden;         /* clips the receipt as it feeds out of the slot */
+    z-index: 5;
+    pointer-events: none;
+    display: none;
+    align-items: flex-end;    /* receipt sits at the bottom of the wrapper */
+    justify-content: center;
+  }
+  .receipt-wrapper.visible { display: flex; }
+  .receipt-slider {
+    width: 320px;             /* matches the slot exactly */
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    transform-origin: bottom center;
+  }
+
+  .receipt {
+    position: relative;
+    width: 100%;
+    background: var(--paper);
+    color: var(--ink);
+    padding: 24px 22px 30px;
+    border-radius: 6px 6px 0 0;
+    max-height: calc(90vh - 8px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    pointer-events: auto;
+    background-image:
+      radial-gradient(circle at 22% 14%, rgba(0,0,0,0.04) 1px, transparent 1.4px),
+      radial-gradient(circle at 78% 62%, rgba(0,0,0,0.035) 1px, transparent 1.4px),
+      radial-gradient(circle at 42% 88%, rgba(0,0,0,0.03) 0.6px, transparent 1px),
+      linear-gradient(180deg, var(--paper) 0%, var(--paper-shade) 100%);
+    background-size: 60px 60px, 80px 80px, 36px 36px, 100% 100%;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.6),
+      inset 0 -1px 0 rgba(0,0,0,0.04);
+  }
+  .receipt::-webkit-scrollbar { display: none; }
+
+
+  /* Print: paper translates up out of the slot in mechanical steps.
+     Animation lives on the slider so the receipt itself can hold the bend transform. */
+  .receipt-wrapper.printing .receipt-slider {
+    animation: feed-out 3s steps(48, end) both;
+  }
+  @keyframes feed-out {
+    0%   { transform: translateY(100%); }
+    100% { transform: translateY(0); }
+  }
+
+
+  .receipt h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink);
+    line-height: 1.15;
+    margin-bottom: 10px;
+  }
+  .receipt .blurb {
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+  }
+
+  .prompt-block {
+    margin: 10px 0 14px;
+  }
+  .prompt-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  .prompt-callout {
+    border: 2px dashed var(--rule);
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.025);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .divider {
+    border: none;
+    border-top: 2px dashed var(--rule);
+    margin: 16px 0;
+  }
+
+  .messages {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-height: 290px;          /* roughly 3 messages — anything more becomes scrollable */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .messages::-webkit-scrollbar { display: none; }
+  .empty {
+    font-size: 13px;
+    color: var(--ink-faint);
+    font-style: italic;
+    padding: 6px 0;
+    text-align: center;
+  }
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    text-align: left;
+    animation: print-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @keyframes print-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* Fresh print: a clip-path line-by-line reveal that mimics a thermal printer */
+  .msg.fresh {
+    animation: msg-fresh 1.1s steps(22, end) both;
+  }
+  @keyframes msg-fresh {
+    0%   { clip-path: inset(0 0 100% 0); }
+    100% { clip-path: inset(0 0 0 0); }
+  }
+  .msg .who {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+  }
+  .msg .body {
+    background: rgba(0,0,0,0.07);
+    border-radius: 12px 12px 12px 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink);
+    word-wrap: break-word;
+  }
+  .msg .when {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--ink-faint);
+  }
+
+  .total {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid #b8b3a8;
+    color: var(--ink);
+  }
+  .total b { font-weight: 700; }
+
+  .receipt-footer {
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 2px dashed var(--rule);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.6;
+    text-align: left;
+  }
+
+  /* ---------- MACHINE ---------- */
+  .machine {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 520px;
+    height: 230px;
+    z-index: 4;
+    pointer-events: none;
+  }
+  .machine.shaking {
+    animation: machine-shake 0.07s linear infinite;
+  }
+  @keyframes machine-shake {
+    0%   { transform: translate(calc(-50% - 0.6px), 0); }
+    25%  { transform: translate(calc(-50% + 0.4px), -0.4px); }
+    50%  { transform: translate(calc(-50% + 0.6px), 0.3px); }
+    75%  { transform: translate(calc(-50% - 0.5px), 0.2px); }
+    100% { transform: translate(calc(-50% - 0.6px), 0); }
+  }
+  .machine.shaking .machine-slot {
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.9),
+      inset 0 -1px 0 rgba(255,255,255,0.15),
+      0 0 14px rgba(255, 220, 120, 0.55);
+  }
+  .machine.shaking .machine-led {
+    animation: ledpulse 0.18s ease-in-out infinite;
+  }
+
+  .machine-body {
+    position: absolute;
+    inset: 30px 0 0 0;
+    background:
+      linear-gradient(180deg, var(--machine) 0%, var(--machine-shade) 60%, var(--machine-deep) 100%);
+    border-radius: 18px 18px 0 0;
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,0.4),
+      inset 0 -2px 0 rgba(0,0,0,0.2),
+      0 -10px 30px rgba(0,0,0,0.5);
+  }
+
+  .machine-top {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 360px;
+    height: 60px;
+    background:
+      linear-gradient(180deg, #e8e3d8 0%, var(--machine) 100%);
+    border-radius: 14px 14px 0 0;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.6),
+      0 -2px 8px rgba(0,0,0,0.25);
+  }
+
+  .machine-slot {
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    height: 8px;
+    background: var(--slot);
+    border-radius: 2px;
+    box-shadow:
+      inset 0 2px 4px rgba(0,0,0,0.9),
+      inset 0 -1px 0 rgba(255,255,255,0.15);
+  }
+
+  .machine-led {
+    position: absolute;
+    top: 38px;
+    right: calc(50% - 165px);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(var(--green-rgb), 0.9);
+    animation: ledpulse 2s ease-in-out infinite;
+  }
+  @keyframes ledpulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+
+  .machine-brand {
+    position: absolute;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(0,0,0,0.55);
+    white-space: nowrap;
+  }
+
+  .machine-vents {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+  }
+  .machine-vents span {
+    display: block;
+    width: 24px;
+    height: 3px;
+    background: rgba(0,0,0,0.35);
+    border-radius: 2px;
+  }
+
+  /* ---------- CONTROLS (LED display + button) ---------- */
+  .controls {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 380px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 6;
+    pointer-events: auto;
+  }
+
+  .led-panel {
+    flex: 1;
+    height: 56px;
+    background: var(--led-bg);
+    border-radius: 14px;
+    box-shadow:
+      inset 0 6px 14px rgba(0,0,0,0.85),
+      inset 0 -1px 0 rgba(255,255,255,0.08),
+      0 4px 8px rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    cursor: text;
+    overflow: hidden;
+    position: relative;
+  }
+  .led-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1.2px);
+    background-size: 4px 4px;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .led-text {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    color: var(--led-on);
+    text-shadow:
+      0 0 4px rgba(241, 239, 230, 0.55),
+      0 0 8px rgba(241, 239, 230, 0.25);
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
+    transition: transform 0.08s linear;
+    will-change: transform;
+  }
+  .led-text.placeholder { color: rgba(241, 239, 230, 0.35); text-shadow: none; }
+  .led-text .cursor {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--led-cursor);
+    margin-left: 2px;
+    vertical-align: middle;
+    animation: blink 1s steps(2, start) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .led-input {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  /* Big chunky 3D round PRINT button */
+  .knob {
+    position: relative;
+    width: 56px;
+    height: 64px;
+    flex-shrink: 0;
+  }
+  .knob-base {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: linear-gradient(180deg, #2a2a2a, #111);
+    border-radius: 50%;
+    box-shadow:
+      0 4px 8px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .knob-cap {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: radial-gradient(120% 120% at 30% 25%,
+      var(--orange) 0%,
+      #ee5b1f 55%,
+      var(--orange-deep) 100%);
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.4),
+      inset 0 -3px 6px rgba(0,0,0,0.4),
+      0 5px 10px rgba(0,0,0,0.55);
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .knob-cap::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    width: 18px;
+    height: 12px;
+    border-radius: 50%;
+    background: linear-gradient(160deg, rgba(255,255,255,0.55), rgba(255,255,255,0));
+    filter: blur(0.4px);
+  }
+  .knob-cap:hover { transform: translate(-50%, -1px); }
+  .knob-cap:active {
+    transform: translate(-50%, 2px);
+    box-shadow:
+      inset 0 2px 4px rgba(255,255,255,0.3),
+      inset 0 -2px 4px rgba(0,0,0,0.5),
+      0 1px 2px rgba(0,0,0,0.6);
+  }
+  .knob-cap.disabled {
+    background: radial-gradient(120% 120% at 30% 25%, #888 0%, #555 55%, #333 100%);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .knob-indicator {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #555;
+    box-shadow: none;
+    transition: background-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .knob-indicator.typing {
+    background: #ffc933;
+    box-shadow: 0 0 6px rgba(255, 201, 51, 0.9);
+  }
+  .knob-indicator.published {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(var(--green-rgb), 0.9);
+  }
+  .knob-indicator.off {
+    background: #555;
+    box-shadow: none;
+  }
+  .knob-label {
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: rgba(255,255,255,0.55);
+    text-transform: uppercase;
+  }
+
+  /* ---------- DAY PROMPT (centered hero — only shown when no one has submitted today) ---------- */
+  .day-prompt {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(640px, 88vw);
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
+    color: var(--ink);
+    transition: opacity 0.7s ease;
+  }
+  .day-prompt.hidden {
+    opacity: 0;
+  }
+  .day-prompt-label {
+    font-family: var(--font-mono);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(50, 30, 10, 0.55);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .day-prompt-text {
+    font-family: var(--font-display);
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    font-size: 38px;
+    line-height: 1.2;
+    border: 2px dashed var(--rule);
+    background: var(--paper);
+    padding: 22px 26px;
+  }
+
+  /* ---------- PAPER TRAIL (accumulating used paper behind the machine) ---------- */
+  .paper-trail {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .paper-trail .scrap {
+    position: absolute;
+    bottom: 0;
+    background-image: linear-gradient(180deg, var(--paper) 0%, var(--paper-shade) 100%);
+    border-radius: 2px;
+    opacity: 0;
+    transform-origin: bottom center;
+    transition: opacity 0.9s ease;
+    filter: drop-shadow(0 -2px 4px rgba(0,0,0,0.55));
+  }
+  .paper-trail .scrap.show { opacity: 0.5; }
+
+  /* ---------- MOBILE ---------- */
+  @media (max-width: 540px) {
+    .receipt-wrapper { width: 88vw; }
+    .machine { width: 100vw; }
+    .machine-top { width: 76vw; }
+    .machine-slot { width: 70vw; }
+    .controls { width: 88vw; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="online-pill">
+    <span class="dot"></span>
+    <span><span id="onlineCount">—</span> here now</span>
+  </div>
+
+  <div class="day-prompt centered" id="dayPrompt">
+    <div class="day-prompt-label">Today's Prompt</div>
+    <div class="day-prompt-text js-prompt-text">What's on your mind today?</div>
+  </div>
+
+  <div class="stage">
+
+    <!-- RECEIPT -->
+    <div class="receipt-wrapper">
+      <div class="receipt-slider" id="receiptSlider">
+      <article class="receipt" id="receipt">
+        <h1>Public Thought Receipts</h1>
+        <p class="blurb">
+          A public ledger of small thoughts. Tell the world what you're thinking
+          today — about your day, a feeling, an observation. One receipt per
+          visitor. No edits. No deletes.
+        </p>
+
+        <div class="prompt-block">
+          <div class="prompt-label">Today's Prompt</div>
+          <div class="prompt-callout js-prompt-text">What's on your mind today?</div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="messages" id="messages">
+          <div class="empty">Waiting for the first thought…</div>
+        </div>
+
+        <div class="total">
+          <span>Total Receipts</span>
+          <span id="messageCount"><b>0</b></span>
+        </div>
+
+        <div class="receipt-footer">
+          Thank you for sharing.<br/>
+          Receipts sync in real time.<br/><br/>
+          THE PUBLIC FEED · EST. 2026
+        </div>
+      </article>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="controls">
+      <label class="led-panel" id="ledPanel" for="hiddenInput">
+        <span class="led-text placeholder" id="ledText">
+          TYPE YOUR THOUGHT…<span class="cursor" id="cursor"></span>
+        </span>
+      </label>
+      <input type="text" id="hiddenInput" class="led-input" maxlength="500" autocomplete="off" />
+      <div class="knob" id="knob">
+        <div class="knob-base"></div>
+        <div class="knob-cap" id="knobCap" role="button" aria-label="Print receipt"></div>
+        <div class="knob-indicator" id="knobIndicator"></div>
+        <div class="knob-label">PRINT</div>
+      </div>
+    </div>
+
+    <!-- PAPER TRAIL (accumulates behind the machine) -->
+    <div class="paper-trail" id="paperTrail" aria-hidden="true"></div>
+
+    <!-- MACHINE -->
+    <div class="machine" aria-hidden="true">
+      <div class="machine-body"></div>
+      <div class="machine-top"></div>
+      <div class="machine-slot"></div>
+      <div class="machine-brand">Emotional Terminal</div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+    // ====== CONFIG ======
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+    // ====================
+
+    const LS_KEY = 'public-receipts:posted';
+    const NAME_KEY = 'public-receipts:name';
+    const LOCAL_FEED_KEY = 'public-receipts:local-feed';
+
+    // Dev/test escape hatch: visit ?reset to clear all local state.
+    const params = new URLSearchParams(location.search);
+    if (params.has('reset')) {
+      [LS_KEY, NAME_KEY, LOCAL_FEED_KEY].forEach(k => localStorage.removeItem(k));
+      history.replaceState({}, '', location.pathname);
+    }
+    // ?test bypasses the one-per-visitor lock and rotates the name each submit.
+    const TEST_MODE = params.has('test');
+
+    // End-of-day reset: when the day rolls over, the prior receipt is "ripped off".
+    const DAY_KEY = 'public-receipts:day';
+    const today = new Date().toISOString().slice(0, 10);
+    const storedDay = localStorage.getItem(DAY_KEY);
+    if (storedDay && storedDay !== today) {
+      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LOCAL_FEED_KEY);
+    }
+    localStorage.setItem(DAY_KEY, today);
+
+    // Daily prompts — picked deterministically from today's date so everyone
+    // sees the same prompt on the same day, and the prompt rotates every day.
+    const PROMPTS = [
+      "What's the smallest step you can take today toward something you've been postponing?",
+      "If you finished the project you keep avoiding, who would you become?",
+      "Name a dream you stopped saying out loud. Why did you stop?",
+      "What would you make today if you knew nobody would ever see it?",
+      "The version of you from five years ago — what would they ask you to begin?",
+      "What are you waiting for permission to do? Who gets to give it?",
+      "What's a thirty-minute version of your biggest dream you could attempt today?",
+      "Whose work makes you jealous? What is that envy pointing to?",
+      "What did you almost do this week, then talked yourself out of?",
+      "If 'I'm too busy' wasn't an option, what would you have to admit?",
+      "What creative risk feels just barely possible right now?",
+      "Write the email you're scared to send. You don't have to send it.",
+      "What's something you used to make for joy that you've stopped making?",
+      "What's the most honest sentence you can write about today?",
+      "If today was a chapter, what would the title be?",
+      "What problem are you uniquely positioned to solve, that you keep ignoring?",
+      "What would change if you treated your dreams like deadlines?",
+      "The thing you keep daydreaming about — describe the first hour of doing it.",
+      "What are you tolerating in your life that you don't have to?",
+      "What would you tell a friend in your exact situation?",
+      "What's the smallest unit of progress you could call a finished day?",
+      "If you stopped consuming for a week and only made things, what would you make first?",
+      "What's a creative idea you've been carrying so long it almost embarrasses you?",
+      "Where in your life have you mistaken comfort for safety?",
+      "What's the first thing you'd do tomorrow if you trusted yourself completely?",
+      "What dream are you finally ready to take seriously?",
+      "What are you almost ready to begin?",
+      "Describe the work that scares you the most. Why does it scare you?",
+      "What would today look like if you weren't trying to look productive?",
+      "What's something you could finish this week if you stopped polishing it?",
+      "What would you start if the only outcome that mattered was that you tried?",
+      "Where are you mistaking research for action?",
+      "Which of your excuses do you believe the most? Are they true?",
+      "If you only had one hour today to make something — what would it be?",
+      "What's a tiny version of your ambition you could ship before you sleep tonight?",
+    ];
+
+    function pickPrompt(dateKey) {
+      let h = 5381;
+      for (let i = 0; i < dateKey.length; i++) h = ((h * 33) ^ dateKey.charCodeAt(i)) | 0;
+      return PROMPTS[Math.abs(h) % PROMPTS.length];
+    }
+    {
+      const txt = pickPrompt(today);
+      document.querySelectorAll('.js-prompt-text').forEach(el => { el.textContent = txt; });
+    }
+
+    const ADJ = ['Quiet','Bright','Soft','Slow','Bold','Hidden','Open','Curious','Tiny','Loud','Warm','Lonely','Idle','Eager','Patient'];
+    const NOUN = ['Wanderer','Echo','Ember','Signal','Cloud','Lantern','Daydream','Compass','Pebble','Tide','Window','Notebook','Field','Kite','River'];
+
+    function makeName() {
+      return `${ADJ[Math.random()*ADJ.length|0]}${NOUN[Math.random()*NOUN.length|0]}${(Math.random()*89+10|0)}`;
+    }
+    function getName() {
+      if (TEST_MODE) return makeName(); // rotate every submit in test mode
+      let n = localStorage.getItem(NAME_KEY);
+      if (n) return n;
+      n = makeName();
+      localStorage.setItem(NAME_KEY, n);
+      return n;
+    }
+
+    const $messages = document.getElementById('messages');
+    const $count = document.getElementById('messageCount');
+    const $online = document.getElementById('onlineCount');
+    const $input = document.getElementById('hiddenInput');
+    const $ledText = document.getElementById('ledText');
+    const $ledPanel = document.getElementById('ledPanel');
+    const $cursor = document.getElementById('cursor');
+    const $knobCap = document.getElementById('knobCap');
+    const $knobIndicator = document.getElementById('knobIndicator');
+    const $receiptWrapper = document.querySelector('.receipt-wrapper');
+    const $receipt = document.getElementById('receipt');
+    const $machine = document.querySelector('.machine');
+    const $dayPrompt = document.getElementById('dayPrompt');
+
+    const PLACEHOLDER = 'TYPE YOUR THOUGHT…';
+    let isLocked = false;
+
+    function paintLED(text, { placeholder = false, showCursor = true } = {}) {
+      $ledText.classList.toggle('placeholder', placeholder);
+      const safe = (text || '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+      $ledText.innerHTML = safe + (showCursor ? '<span class="cursor"></span>' : '');
+      // Scroll horizontally so the cursor / latest characters stay visible.
+      const visible = $ledPanel.clientWidth - 28; // panel padding 0 14px
+      const total = $ledText.scrollWidth;
+      const offset = Math.max(0, total - visible);
+      $ledText.style.transform = `translateX(-${offset}px)`;
+    }
+
+    function refreshLED() {
+      if (isLocked) return;
+      const v = $input.value;
+      $knobIndicator.classList.remove('published');
+      if (!v) {
+        paintLED(PLACEHOLDER, { placeholder: true, showCursor: true });
+        $knobIndicator.classList.remove('typing');
+      } else {
+        paintLED(v.toUpperCase(), { placeholder: false, showCursor: document.activeElement === $input });
+        $knobIndicator.classList.add('typing');
+      }
+    }
+
+    $ledPanel.addEventListener('click', () => { if (!isLocked) $input.focus(); });
+    $input.addEventListener('input', refreshLED);
+    $input.addEventListener('focus', refreshLED);
+    $input.addEventListener('blur', refreshLED);
+    $input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    });
+
+    function lockUI(message) {
+      isLocked = true;
+      $input.disabled = true;
+      $knobCap.classList.add('disabled');
+      paintLED(message, { placeholder: false, showCursor: false });
+    }
+
+    function alreadyPosted() { return !!localStorage.getItem(LS_KEY); }
+    function markPosted(id) {
+      localStorage.setItem(LS_KEY, JSON.stringify({ id, at: new Date().toISOString() }));
+    }
+
+    function fmtTime(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderMessages(rows) {
+      if (!rows.length) {
+        $messages.innerHTML = '<div class="empty">Waiting for the first thought…</div>';
+        return;
+      }
+      $messages.innerHTML = '';
+      for (const r of rows) {
+        const el = document.createElement('div');
+        el.className = 'msg';
+        el.dataset.id = r.id;
+        const who = document.createElement('span'); who.className = 'who'; who.textContent = r.name || 'Anon';
+        const body = document.createElement('div'); body.className = 'body'; body.textContent = r.message;
+        const when = document.createElement('span'); when.className = 'when'; when.textContent = fmtTime(r.created_at);
+        el.append(who, body, when);
+        $messages.append(el);
+      }
+    }
+
+    function appendMessage(r, opts = {}) {
+      const empty = $messages.querySelector('.empty');
+      if (empty) empty.remove();
+      if ($messages.querySelector(`[data-id="${r.id}"]`)) return;
+      const el = document.createElement('div');
+      el.className = 'msg' + (opts.fresh ? ' fresh' : '');
+      el.dataset.id = r.id;
+      const who = document.createElement('span'); who.className = 'who'; who.textContent = r.name || 'Anon';
+      const body = document.createElement('div'); body.className = 'body'; body.textContent = r.message;
+      const when = document.createElement('span'); when.className = 'when'; when.textContent = fmtTime(r.created_at);
+      el.append(who, body, when);
+      $messages.append(el);
+      $messages.scrollTop = $messages.scrollHeight;
+    }
+
+    function setCount(n) {
+      $count.innerHTML = `<b>${n}</b>`;
+      const m = document.getElementById('machineCount');
+      if (m) m.textContent = String(n).padStart(3, '0');
+      updatePaperTrail(n);
+    }
+
+    const $paperTrail = document.getElementById('paperTrail');
+    function updatePaperTrail(count) {
+      if (!$paperTrail) return;
+      const target = Math.min(count, 18);
+      const existing = $paperTrail.children.length;
+      if (target > existing) {
+        for (let i = existing; i < target; i++) {
+          const scrap = document.createElement('div');
+          scrap.className = 'scrap';
+          const w = 30 + Math.random() * 90;
+          const h = 8 + Math.random() * 16;
+          const left = Math.random() * 100;
+          const rot = (Math.random() - 0.5) * 28;
+          const ty = Math.random() * 14;
+          scrap.style.width = w + 'px';
+          scrap.style.height = h + 'px';
+          scrap.style.left = `calc(${left}% - ${w / 2}px)`;
+          scrap.style.transform = `rotate(${rot}deg) translateY(${ty}px)`;
+          $paperTrail.appendChild(scrap);
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => scrap.classList.add('show'))
+          );
+        }
+      } else if (target < existing) {
+        while ($paperTrail.children.length > target) {
+          $paperTrail.removeChild($paperTrail.lastChild);
+        }
+      }
+    }
+
+    // ---- Storage layer: Supabase if configured, else local ----
+    const configured =
+      SUPABASE_URL.startsWith('https://') &&
+      SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY_HERE';
+
+    let supabase = null;
+    if (configured) supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    function getLocalFeed() {
+      try { return JSON.parse(localStorage.getItem(LOCAL_FEED_KEY)) || []; }
+      catch { return []; }
+    }
+    function saveLocalFeed(arr) {
+      localStorage.setItem(LOCAL_FEED_KEY, JSON.stringify(arr));
+    }
+    function appendLocalFeed(entry) {
+      const arr = getLocalFeed();
+      arr.push(entry);
+      saveLocalFeed(arr);
+    }
+
+    async function fetchAll() {
+      if (supabase) {
+        const { data, error, count } = await supabase
+          .from('receipts')
+          .select('*', { count: 'exact' })
+          .order('created_at', { ascending: true })
+          .limit(500);
+        if (error) throw error;
+        return { rows: data || [], total: count ?? data.length };
+      }
+      const rows = getLocalFeed();
+      return { rows, total: rows.length };
+    }
+
+    async function insertEntry({ message, name }) {
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('receipts')
+          .insert({ message, name })
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
+      const entry = {
+        id: Date.now(),
+        name,
+        message,
+        created_at: new Date().toISOString()
+      };
+      appendLocalFeed(entry);
+      return entry;
+    }
+
+    async function revealReceipt({ animate }) {
+      try {
+        const { rows, total } = await fetchAll();
+        renderMessages(rows);
+        setCount(total);
+      } catch (e) {
+        $messages.innerHTML = `<div class="empty">Couldn't load: ${e.message}</div>`;
+      }
+
+      $receiptWrapper.classList.add('visible');
+      if (animate) {
+        $receiptWrapper.classList.remove('printing');
+        $machine.classList.remove('shaking');
+        // Force reflow so the animation restarts cleanly
+        void $receiptWrapper.offsetWidth;
+        $receiptWrapper.classList.add('printing');
+        $machine.classList.add('shaking');
+        setTimeout(() => $machine.classList.remove('shaking'), 3050);
+      }
+      // Scroll the messages list to the latest entry after the receipt is shown
+      setTimeout(() => {
+        $messages.scrollTop = $messages.scrollHeight;
+      }, animate ? 3100 : 50);
+    }
+
+    async function submit() {
+      if (isLocked) return;
+      if (!TEST_MODE && alreadyPosted()) { lockUI('THANK YOU · ONE PER VISITOR'); return; }
+      const text = $input.value.trim();
+      if (!text) return;
+
+      $knobCap.classList.add('disabled');
+      let dots = 0;
+      const printingTimer = setInterval(() => {
+        dots = (dots + 1) % 4;
+        paintLED('PRINTING' + '.'.repeat(dots), { showCursor: false });
+      }, 220);
+
+      try {
+        // First submission of the day = full print animation.
+        // Subsequent ones get a shorter print animation that prints the new line onto the existing receipt.
+        const isFirstOfDay = !$receiptWrapper.classList.contains('visible');
+        const name = getName();
+        const entry = await insertEntry({ message: text, name });
+
+        // Indicator: typing → published
+        $knobIndicator.classList.remove('typing');
+        $knobIndicator.classList.add('published');
+
+        if (isFirstOfDay) {
+          // Fade today's prompt out as the receipt prints.
+          hideDayPrompt({ animate: true });
+          await revealReceipt({ animate: true });
+          clearInterval(printingTimer);
+        } else {
+          // Subsequent: keep the LED 'PRINTING…' dots cycling and the machine
+          // shaking while the new line prints onto the receipt.
+          $machine.classList.add('shaking');
+          appendMessage(entry, { fresh: true });
+          const cur = parseInt($count.textContent.replace(/\D/g, ''), 10) || 0;
+          setCount(cur + 1);
+          await new Promise(r => setTimeout(r, 1150));
+          clearInterval(printingTimer);
+          $machine.classList.remove('shaking');
+        }
+
+        if (TEST_MODE) {
+          setTimeout(() => {
+            $knobCap.classList.remove('disabled');
+            $input.value = '';
+            refreshLED(); // resets indicator (removes published, no input → gray)
+            $input.focus();
+          }, 250);
+        } else {
+          markPosted(entry.id);
+          lockUI('THANK YOU · COME BACK ANOTHER DAY');
+          // .published stays since lockUI no longer touches the indicator
+        }
+      } catch (e) {
+        clearInterval(printingTimer);
+        $knobCap.classList.remove('disabled');
+        paintLED('ERROR · TRY AGAIN', { showCursor: false });
+        setTimeout(refreshLED, 1500);
+        console.error(e);
+      }
+    }
+
+    $knobCap.addEventListener('click', submit);
+
+    function hideDayPrompt({ animate = true } = {}) {
+      if (animate) {
+        $dayPrompt.classList.add('hidden');
+        setTimeout(() => { $dayPrompt.style.display = 'none'; }, 750);
+      } else {
+        $dayPrompt.style.display = 'none';
+      }
+    }
+
+    async function dayHasEntries() {
+      if (supabase) {
+        const { total } = await fetchAll();
+        return total > 0;
+      }
+      return getLocalFeed().length > 0;
+    }
+
+    (async () => {
+      // Initial state: prompt centered until someone submits today;
+      // receipt is hidden until either someone has already submitted today
+      // or the current visitor submits.
+      if (TEST_MODE) {
+        refreshLED();
+        if (await dayHasEntries()) {
+          hideDayPrompt({ animate: false });
+          revealReceipt({ animate: false });
+        }
+        setTimeout(() => $input.focus(), 100);
+      } else if (alreadyPosted()) {
+        lockUI('THANK YOU · ONE PER VISITOR');
+        $knobIndicator.classList.add('published');
+        moveDayPromptToSide();
+        revealReceipt({ animate: false });
+      } else {
+        refreshLED();
+        setTimeout(() => $input.focus(), 100);
+        if (await dayHasEntries()) {
+          hideDayPrompt({ animate: false });
+          revealReceipt({ animate: false });
+        }
+      }
+    })();
+
+    if (supabase) {
+      supabase
+        .channel('receipts-stream')
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'receipts' },
+          (payload) => {
+            // Only show realtime updates after the user has printed
+            if (!$receiptWrapper.classList.contains('visible')) return;
+            appendMessage(payload.new, { fresh: true });
+            setCount((parseInt($count.textContent, 10) || 0) + 1);
+            $machine.classList.add('shaking');
+            setTimeout(() => $machine.classList.remove('shaking'), 1150);
+          })
+        .subscribe();
+
+      // Visitor presence — count concurrent viewers via a presence channel.
+      const presenceKey = Math.random().toString(36).slice(2);
+      const presence = supabase.channel('online-presence', {
+        config: { presence: { key: presenceKey } },
+      });
+      presence
+        .on('presence', { event: 'sync' }, () => {
+          const state = presence.presenceState();
+          $online.textContent = Object.keys(state).length || 1;
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await presence.track({ joinedAt: Date.now() });
+          }
+        });
+    } else {
+      // Local mode: it's just you.
+      $online.textContent = '1';
+    }
+  </script>
+</body>
+</html>
